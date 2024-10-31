@@ -5,7 +5,7 @@ from scipy.interpolate import griddata
 from mpl_toolkits.mplot3d import Axes3D
 from PIL import Image
 from scipy.ndimage import zoom
-
+#updated
 
 
 # Load the CSV file and parse coordinates
