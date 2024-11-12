@@ -8,6 +8,7 @@ obj/
 Debug/
 Release/
 x64/
+commute/
 x86/
 
 # Ignore Visual Studio-specific files
