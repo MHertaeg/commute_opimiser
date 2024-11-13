@@ -14,12 +14,58 @@
 #include <string>
 #include <vector>
 
+
 struct coordinate_input {
     double latitude;
     double longitude;
     double time;
 
 };
+
+struct pixel_data {
+    double value;
+    double colour;
+
+};
+
+struct GPSCoordinate {
+    double latitude;
+    double longitude;
+};
+
+struct PixelCoordinate {
+    int x;
+    int y;
+};
+
+struct MapBounds {
+    GPSCoordinate topLeft;
+    GPSCoordinate topRight;
+    GPSCoordinate bottomLeft;
+    GPSCoordinate bottomRight;
+};
+
+
+
+double interpolate(std::vector<coordinate_input> input_data, double longitude, double latitude) {
+    double dist;
+    double weighted_sum = 0.0;
+    double weight_total = 0.0;
+    const double epsilon = 1e-6;
+    for (const auto& point : input_data) {
+        dist = std::sqrt((point.latitude - latitude) * (point.latitude - latitude) + (point.longitude - longitude) * (point.longitude - longitude));
+
+        if (dist < epsilon) { // Handle case when the point is extremely close
+            return point.time;
+        }
+
+        double weight = 1.0 / dist;
+        weighted_sum += point.time * weight;
+        weight_total += weight;
+    }
+    return (weight_total > 0) ? weighted_sum / weight_total : 0.0;
+};
+
 
 std::vector<coordinate_input> read_csv(std::string file_name) {
     std::vector<coordinate_input> input_data;
@@ -73,15 +119,7 @@ public:
     virtual bool OnInit();
 };
 
-struct GPSCoordinate {
-    double latitude;
-    double longitude;
-};
 
-struct PixelCoordinate {
-    int x;
-    int y;
-};
 
 // Function to convert pixel coordinates to GPS coordinates
 GPSCoordinate pixelToGPS(
@@ -109,9 +147,17 @@ GPSCoordinate pixelToGPS(
 class MyFrame : public wxFrame
 {
 public:
-    MyFrame();
+    MyFrame(const std::vector<std::vector<pixel_data>>& data);
+
+    MapBounds getMapBounds() const { return mapBounds; }
 
 private:
+    MapBounds mapBounds = {
+    { -37.673467, 144.900807 }, // topLeft
+    { -37.675475, 145.244541 }, // topRight
+    { -37.933589, 144.913295 }, // bottomLeft
+    { -37.931713, 145.237128 }  // bottomRight
+    };
     void OnPaint(wxPaintEvent& event);
     void OnHello(wxCommandEvent& event);
     void OnExit(wxCommandEvent& event);
@@ -130,6 +176,8 @@ private:
     wxPoint m_lastMousePos;                  // Stores the last mouse position for panning
 
     bool m_isPanning = false;                // Flag for panning mode
+
+    std::vector<std::vector<pixel_data>> image_data;
 };
 
 enum
@@ -141,17 +189,54 @@ wxIMPLEMENT_APP(MyApp);
 
 bool MyApp::OnInit()
 {
+
+    const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/test_coords.csv";
+    PixelCoordinate data_point;
+    GPSCoordinate gps;
+    MapBounds mapBounds = {
+    { -37.673467, 144.900807 }, // topLeft
+    { -37.675475, 145.244541 }, // topRight
+    { -37.933589, 144.913295 }, // bottomLeft
+    { -37.931713, 145.237128 }  // bottomRight
+    };
+
+    int image_width = 1448;
+    int image_height = 1340;
+    
+
+    std::vector<std::vector<pixel_data>> image_data(image_height, std::vector<pixel_data>(image_width));
+    //image_data.resize(image_height, std::vector<pixel_data>(image_width));
+    //update
+    //std::vector<DataPoint> data = readCSV(filename);
+    std::vector<coordinate_input> input_data;
+    input_data = read_csv(filename_input);
+    //for (int i = 0; i < input_data.size(); i++)
+    //{
+    //    std::cout << input_data[i].longitude << std::endl;
+    //}
+
+    for (int i = 0; i < image_data.size(); ++i) { // Loop over rows
+        for (int j = 0; j < image_data[i].size(); ++j) { // Loop over elements in the row
+            data_point = { i, j };
+            gps = pixelToGPS(data_point, image_width, image_height, mapBounds.topLeft, mapBounds.topRight, mapBounds.bottomLeft, mapBounds.bottomRight);
+            image_data[i][j].value = interpolate(input_data, gps.longitude, gps.latitude);
+        }
+    }
+    std::cout << " hehehe" << image_data.size() << std::endl;
     wxImage::AddHandler(new wxPNGHandler);  // Add PNG image handler
 
-    MyFrame* frame = new MyFrame();
+    MyFrame* frame = new MyFrame(image_data);
     frame->SetClientSize(800, 600);
     frame->Show(true);
     return true;
 }
 
-MyFrame::MyFrame()
-    : wxFrame(NULL, wxID_ANY, "Michael's Commute Optimiser")
+MyFrame::MyFrame(const std::vector<std::vector<pixel_data>>& data)
+    : wxFrame(NULL, wxID_ANY, "Michael's Commute Optimiser"),
+    image_data(data)
 {
+    // Initialize mapBounds in the constructor
+    
     // Set the background style to wxBG_STYLE_PAINT
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     // Load the background image (change path to your image file)
@@ -207,6 +292,35 @@ void MyFrame::OnPaint(wxPaintEvent& event)
         // Draw the scaled and panned image
         dc.DrawBitmap(scaledBitmap, m_panOffset.x, m_panOffset.y, false);
     }
+    
+    // Overlay heatmap on top of the background
+    int imageWidth = m_backgroundImage.GetWidth();
+    int imageHeight = m_backgroundImage.GetHeight();
+    std::cout << image_data.size() << std::endl;
+    std::cout << image_data[0].size() << std::endl;
+    std::cout << imageHeight << " " << imageWidth << std::endl;
+    for (int i = 0; i < imageHeight; ++i) {
+        for (int j = 0; j < imageWidth; ++j) {
+
+
+        double value = image_data[i][j].value;  // Get the value from the resized image_data
+        wxColor color = wxColour(255 * (1.0 - value), 0, 255 * value); // Simple blue-red gradient
+
+        // Adjust coordinates for zooming and panning
+        int drawX = m_panOffset.x + j * m_zoomLevel;  // Scale by zoom level
+        int drawY = m_panOffset.y + i * m_zoomLevel;  // Scale by zoom level
+
+        // Make sure coordinates are within the window bounds
+        if (drawX < GetClientSize().x && drawY < GetClientSize().y)
+        {
+            dc.SetBrush(wxBrush(color));
+            dc.SetPen(wxPen(color));
+            dc.DrawRectangle(drawX, drawY, m_zoomLevel, m_zoomLevel);  // Draw scaled rectangles for each heatmap point
+        }
+        }
+        //std::cout << i << std::endl;
+    }
+    //std::cout << "finished_loop" << std::endl;
 }
 
 void MyFrame::OnMouseWheel(wxMouseEvent& event)
@@ -243,8 +357,6 @@ void MyFrame::OnMouseClick(wxMouseEvent& event)
     double scaledX = mousePos.x / m_zoomLevel;
     double scaledY = mousePos.y / m_zoomLevel;
 
-
-
 }
 
 void MyFrame::OnLeftMouseDown(wxMouseEvent& event)
@@ -279,10 +391,10 @@ void MyFrame::OnRightMouseDown(wxMouseEvent& event)
         // Output the coordinates
         PixelCoordinate MouseClick = { scaledX, scaledY };
 
-        GPSCoordinate topLeft = { -37.673467 ,144.900807 };
-        GPSCoordinate topRight = { -37.675475, 145.244541 };
-        GPSCoordinate bottomLeft = { -37.933589, 144.913295 };
-        GPSCoordinate bottomRight = { -37.931713, 145.237128 };
+        GPSCoordinate topLeft = mapBounds.topLeft;
+        GPSCoordinate topRight = mapBounds.topRight;
+        GPSCoordinate bottomLeft = mapBounds.bottomLeft;
+        GPSCoordinate bottomRight = mapBounds.bottomRight;
 
         GPSCoordinate gps = pixelToGPS(MouseClick, 600, 500, topLeft, topRight, bottomLeft, bottomRight);
 
