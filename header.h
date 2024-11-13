@@ -13,7 +13,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
+#include <limits>
 
 struct coordinate_input {
     double latitude;
@@ -217,6 +217,8 @@ public:
 
 private:
     std::vector<coordinate_input> m_inputData;
+    int m_transparencyMethod = 1;
+
     MapBounds mapBounds= {
     { -37.673467, 144.900807 }, // topLeft
     { -37.675475, 145.244541 }, // topRight
@@ -235,8 +237,13 @@ private:
     void OnMouseMove(wxMouseEvent& event);    // For panning the map
     void OnMouseUp(wxMouseEvent& event);      // For ending panning
     void OnMouseClick(wxMouseEvent& event);   // For outputting coordinates on click
+    void PrepareColourmapWithTransparency();
+    void SetTransparencyMethod(int method);
+    void OnTransparencyMethod1(wxCommandEvent& event);
+    void OnTransparencyMethod2(wxCommandEvent& event);
 
     wxBitmap m_backgroundImage;  // Bitmap to store the background image
+    wxBitmap m_colourmap;  // Bitmap to store the background image
 
     double m_zoomLevel = 1.0;                // Zoom factor
     wxPoint m_panOffset = wxPoint(0, 0);     // Offset for panning
@@ -244,12 +251,13 @@ private:
 
     bool m_isPanning = false;                // Flag for panning mode
 
-    
 };
 
 enum
 {
-    ID_Hello = 1
+    ID_Hello = 1,
+    ID_TRANSPARENCY_METHOD1,
+    ID_TRANSPARENCY_METHOD2
 };
 
 wxIMPLEMENT_APP(MyApp);
@@ -292,10 +300,63 @@ bool MyApp::OnInit()
     return true;
 }
 
+void MyFrame::PrepareColourmapWithTransparency()
+{
+    wxImage colourmapImage = m_colourmap.ConvertToImage();
+    if (!colourmapImage.HasAlpha())
+    {
+        colourmapImage.InitAlpha();
+    }
+
+    for (int x = 0; x < colourmapImage.GetWidth(); ++x)
+    {
+        for (int y = 0; y < colourmapImage.GetHeight(); ++y)
+        {
+            unsigned char red = 255;
+            unsigned char green = 0;
+            unsigned char blue = 0;
+            unsigned char alpha;
+
+            // Different transparency methods
+            if (m_transparencyMethod == 1)
+            {
+                alpha = 128; // 50% transparency
+            }
+            else // method 2
+            {
+                alpha = 64;  // 75% transparency
+            }
+
+            colourmapImage.SetRGB(x, y, red, green, blue);
+            colourmapImage.SetAlpha(x, y, alpha);
+        }
+    }
+
+    m_colourmap = wxBitmap(colourmapImage);
+}
+
+void MyFrame::SetTransparencyMethod(int method)
+{
+    m_transparencyMethod = method;
+    PrepareColourmapWithTransparency();  // Apply the new transparency method
+
+    // Trigger a repaint after setting transparency
+    Refresh();
+}
+
+void MyFrame::OnTransparencyMethod1(wxCommandEvent& event)
+{
+    SetTransparencyMethod(1);  // Apply transparency method 1
+}
+
+void MyFrame::OnTransparencyMethod2(wxCommandEvent& event)
+{
+    SetTransparencyMethod(2);  // Apply transparency method 2
+}
+
 MyFrame::MyFrame(const std::vector<coordinate_input>& input_data)
     : wxFrame(NULL, wxID_ANY, "Michael's Commute Optimiser"),
     m_inputData(input_data)
-
 {
     // Initialize mapBounds in the constructor
     
@@ -303,6 +364,9 @@ MyFrame::MyFrame(const std::vector<coordinate_input>& input_data)
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     // Load the background image (change path to your image file)
     m_backgroundImage.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map.png", wxBITMAP_TYPE_PNG);
+    m_colourmap = wxBitmap(m_backgroundImage.GetWidth(), m_backgroundImage.GetHeight(), 32);
+    PrepareColourmapWithTransparency();
+    //m_colourmap.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map2.png", wxBITMAP_TYPE_PNG);
 
     Bind(wxEVT_PAINT, &MyFrame::OnPaint, this);
     Bind(wxEVT_MOUSEWHEEL, &MyFrame::OnMouseWheel, this);
@@ -320,8 +384,13 @@ MyFrame::MyFrame(const std::vector<coordinate_input>& input_data)
     wxMenu* menuHelp = new wxMenu;
     menuHelp->Append(wxID_ABOUT);
 
+    wxMenu* menuTransparency = new wxMenu;
+    menuTransparency->Append(ID_TRANSPARENCY_METHOD1, "&Transparency Method 1");
+    menuTransparency->Append(ID_TRANSPARENCY_METHOD2, "&Transparency Method 2");
+
     wxMenuBar* menuBar = new wxMenuBar;
     menuBar->Append(menuFile, "&File");
+    menuBar->Append(menuTransparency, "&Transparency");
     menuBar->Append(menuHelp, "&Help");
 
     SetMenuBar(menuBar);
@@ -329,10 +398,15 @@ MyFrame::MyFrame(const std::vector<coordinate_input>& input_data)
     CreateStatusBar();
     SetStatusText("Welcome to wxWidgets!");
 
+    // Bind events for transparency menu options
+    Bind(wxEVT_MENU, &MyFrame::OnTransparencyMethod1, this, ID_TRANSPARENCY_METHOD1);
+    Bind(wxEVT_MENU, &MyFrame::OnTransparencyMethod2, this, ID_TRANSPARENCY_METHOD2);
+
     Bind(wxEVT_MENU, &MyFrame::OnHello, this, ID_Hello);
     Bind(wxEVT_MENU, &MyFrame::OnAbout, this, wxID_ABOUT);
     Bind(wxEVT_MENU, &MyFrame::OnExit, this, wxID_EXIT);
 }
+
 
 void MyFrame::OnPaint(wxPaintEvent& event)
 {
@@ -344,6 +418,7 @@ void MyFrame::OnPaint(wxPaintEvent& event)
     dc.DrawRectangle(0, 0, GetClientSize().x, GetClientSize().y);  // Fill entire window with black
 
     if (m_backgroundImage.IsOk())
+    //if(1==0)
     {
         // Scale the image according to zoom level
         wxImage scaledImage = m_backgroundImage.ConvertToImage();
@@ -353,6 +428,16 @@ void MyFrame::OnPaint(wxPaintEvent& event)
 
         // Draw the scaled and panned image
         dc.DrawBitmap(scaledBitmap, m_panOffset.x, m_panOffset.y, false);
+    }
+    if (m_colourmap.IsOk())
+    {
+        // Scale the heat map overlay according to zoom level
+        wxImage scaledHeatMap = m_colourmap.ConvertToImage();
+        scaledHeatMap.Rescale(m_colourmap.GetWidth() * m_zoomLevel, m_colourmap.GetHeight() * m_zoomLevel);
+        wxBitmap scaledHeatMapBitmap(scaledHeatMap);
+
+        // Draw the scaled and panned heat map overlay with transparency enabled
+        dc.DrawBitmap(scaledHeatMapBitmap, m_panOffset.x, m_panOffset.y, true);
     }
 
 }
