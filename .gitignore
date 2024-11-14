@@ -1,2 +1,28 @@
 coordinates.csv
 coordinates.xlsx
+
+
+# Ignore build directories
+bin/
+obj/
+Debug/
+Release/
+x64/
+commute/
+x86/
+
+# Ignore Visual Studio-specific files
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Ignore dependency directories
+packages/
+
+# Ignore other common files
+*.log
+*.vspscc
+.idea/
