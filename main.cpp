@@ -1,26 +1,39 @@
 // wxWidgets "Hello World" Program
 #include "header.h"
 
-struct pixel_data {
-    double value;
-    double colour;
-
-};
 
 
 
-int main(int argc, char** argv) {
-    const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/test_coords.csv";
-    int image_width = 1448;
-    int image_height = 1340;
-    //update
-    //std::vector<DataPoint> data = readCSV(filename);
-    std::vector<coordinate_input> input_data;
-    input_data = read_csv(filename_input);
-    for (int i = 0; i < input_data.size(); i++)
-    {
-        std::cout << input_data[i].longitude << std::endl;
-    }
-    wxApp::SetInstance(new MyApp());
-    return wxEntry(argc, argv);
-}
+    int main(int argc, char** argv) {
+        if (1 == 0)
+        {
+            MapBounds mapBounds = {
+                { -37.673467, 144.900807 }, // topLeft
+                { -37.675475, 145.244541 }, // topRight
+                { -37.933589, 144.913295 }, // bottomLeft
+                { -37.931713, 145.237128 }  // bottomRight
+               };
+            const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/test_coords.csv";
+            std::vector<coordinate_input> m_inputData;
+            m_inputData = read_csv(filename_input);
+            GPSCoordinate topLeft = mapBounds.topLeft;
+            GPSCoordinate topRight = mapBounds.topRight;
+            GPSCoordinate bottomLeft = mapBounds.bottomLeft;
+            GPSCoordinate bottomRight = mapBounds.bottomRight;
+            PixelCoordinate MouseClick = { 0, 0 };
+
+            GPSCoordinate gps = pixelToGPS(MouseClick, 1448, 1340, topLeft, topRight, bottomLeft, bottomRight);
+            //std::cout << gps.latitude << " , " << gps.longitude << std::endl;
+            
+
+            //double value = interpolate(m_inputData, gps.latitude, gps.longitude);
+            double value = interpolate_closest_three_points(m_inputData, -37.931713, 145.237128);
+
+            std::cout << value;
+        }
+        if (1 == 1)
+        {
+            wxApp::SetInstance(new MyApp());
+            return wxEntry(argc, argv);
+        }
+    };

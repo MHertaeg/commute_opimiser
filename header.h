@@ -13,13 +13,203 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <limits>
+#include <iostream>
+#include <thread>  // For std::this_thread::sleep_for
+#include <chrono>  // For std::chrono::seconds
+
 
 struct coordinate_input {
     double latitude;
     double longitude;
     double time;
+};
+
+struct pixel_data {
+    double value;
+    double colour;
 
 };
+
+struct GPSCoordinate {
+    double latitude;
+    double longitude;
+};
+
+struct PixelCoordinate {
+    int x;
+    int y;
+};
+
+struct MapBounds {
+    GPSCoordinate topLeft;
+    GPSCoordinate topRight;
+    GPSCoordinate bottomLeft;
+    GPSCoordinate bottomRight;
+};
+
+
+double linear_interpolate(const coordinate_input& p1, const coordinate_input& p2, double latitude, double longitude) {
+    // Ensure latitude and longitude of the points are different to avoid division by zero
+    if (p1.latitude == p2.latitude && p1.longitude == p2.longitude) {
+        throw std::invalid_argument("Coordinates p1 and p2 cannot be identical.");
+    }
+
+    // Calculate the distance between the two points
+    double dist1 = std::sqrt(std::pow(p1.latitude - latitude, 2) + std::pow(p1.longitude - longitude, 2));
+    double dist2 = std::sqrt(std::pow(p2.latitude - latitude, 2) + std::pow(p2.longitude - longitude, 2));
+    //std::cout << "distance   " << dist1 << " , " << dist2 << std::endl;
+    // Linear interpolation formula
+    double weight1 = 1.0 / dist1;
+    double weight2 = 1.0 / dist2;
+
+    double interpolated_time = (p1.time * weight1 + p2.time * weight2) / (weight1 + weight2);
+    return interpolated_time;
+}
+
+
+std::vector<coordinate_input> find_closest_three_points(const std::vector<coordinate_input>& input_data, double latitude, double longitude) {
+    // Ensure we have at least three points
+    if (input_data.size() < 3) {
+        throw std::invalid_argument("At least three points are required for interpolation.");
+    }
+
+    // Initialize the closest points with the first three points
+    std::vector<coordinate_input> closest_points = { input_data[0], input_data[1], input_data[2] };
+    std::vector<double> min_dists = {
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max()
+    };
+
+    // Find the three closest points
+    for (const auto& point : input_data) {
+        double dist = std::sqrt(std::pow(point.latitude - latitude, 2) + std::pow(point.longitude - longitude, 2));
+
+        // Update the closest points if necessary
+        if (dist < min_dists[0]) {
+            // Shift everything one position
+            min_dists[2] = min_dists[1];
+            min_dists[1] = min_dists[0];
+            min_dists[0] = dist;
+
+            closest_points[2] = closest_points[1];
+            closest_points[1] = closest_points[0];
+            closest_points[0] = point;
+        }
+        else if (dist < min_dists[1]) {
+            // Shift second to third
+            min_dists[2] = min_dists[1];
+            min_dists[1] = dist;
+
+            closest_points[2] = closest_points[1];
+            closest_points[1] = point;
+        }
+        else if (dist < min_dists[2]) {
+            min_dists[2] = dist;
+            closest_points[2] = point;
+        }
+    }
+
+    /*
+    // Debug output
+    for (size_t i = 0; i < 3; ++i) {
+        std::cout << "Closest Point " << (i+1) << ": Latitude = " << closest_points[i].latitude
+                  << ", Longitude = " << closest_points[i].longitude
+                  << ", Time = " << closest_points[i].time
+                  << ", Distance = " << min_dists[i] << std::endl;
+    }
+    */
+
+    return closest_points;
+};
+    double interpolate_closest_three_points(const std::vector<coordinate_input>&input_data, double latitude, double longitude) {
+        auto closest_points = find_closest_three_points(input_data, latitude, longitude);
+
+        // Here you can implement your preferred interpolation method using these three points
+        // For now, let's use a simple weighted average based on inverse distance
+        double total_weight = 0.0;
+        double weighted_sum = 0.0;
+
+        for (const auto& point : closest_points) {
+            double dist = std::sqrt(std::pow(point.latitude - latitude, 2) +
+                std::pow(point.longitude - longitude, 2));
+            double weight = 1.0 / (dist + 1e-10); // Adding small number to avoid division by zero
+            weighted_sum += point.time * weight;
+            total_weight += weight;
+        }
+
+        return weighted_sum / total_weight;
+    };
+
+    double linear_interpolate_closest_points(const std::vector<coordinate_input>& input_data, double latitude, double longitude) {
+        // Ensure we have at least two points to interpolate
+        if (input_data.size() < 2) {
+            throw std::invalid_argument("At least two points are required for interpolation.");
+        }
+
+        // Initialize the closest points with the first two points
+        coordinate_input closest_point1 = input_data[0];
+        coordinate_input closest_point2 = input_data[1];
+
+        // Initialize distances for the two closest points
+        double min_dist1 = std::numeric_limits<double>::max();
+        double min_dist2 = std::numeric_limits<double>::max();
+
+        // Find the two closest points
+        for (const auto& point : input_data) {
+            double dist = std::sqrt(std::pow(point.latitude - latitude, 2) + std::pow(point.longitude - longitude, 2));
+
+            // Check if this point is closer than the first closest
+            if (dist < min_dist1) {
+                min_dist2 = min_dist1;
+                closest_point2 = closest_point1;
+                min_dist1 = dist;
+                closest_point1 = point;
+            }
+            // Check if this point is closer than the second closest
+            else if (dist < min_dist2) {
+                min_dist2 = dist;
+                closest_point2 = point;
+            }
+        }
+        /*
+        std::cout << "Closest Point 1: Latitude = " << closest_point1.latitude
+            << ", Longitude = " << closest_point1.longitude
+            << ", Time = " << closest_point1.time << std::endl;
+
+        std::cout << "Closest Point 2: Latitude = " << closest_point2.latitude
+            << ", Longitude = " << closest_point2.longitude
+            << ", Time = " << closest_point2.time << std::endl;
+            */
+            // Perform linear interpolation between the two closest points
+        return linear_interpolate(closest_point1, closest_point2, latitude, longitude);
+    };
+
+
+double interpolate(std::vector<coordinate_input> input_data, double latitude, double longitude) {
+    double dist;
+    double weighted_sum = 0.0;
+    double weight_total = 0.0;
+    const double epsilon = 1e-6;
+    for (const auto& point : input_data) {
+        dist = std::sqrt((point.latitude - latitude) * (point.latitude - latitude) + (point.longitude - longitude) * (point.longitude - longitude));
+        std::cout << "dist" << " , " << dist << std::endl;
+        if (dist < epsilon) { // Handle case when the point is extremely close
+            return point.time;
+        }
+
+        double weight = 1.0 / dist;
+        std::cout << point.latitude << " , " << point.longitude << " , " << latitude << " , " << longitude << std::endl;
+        std::cout << point.time << " , " << weight << std::endl;
+        weighted_sum += point.time * weight;
+        weight_total += weight;
+
+    }
+    std::cout << weighted_sum / weight_total << std::endl;
+    return (weight_total > 0) ? weighted_sum / weight_total : 0.0;
+};
+
 
 std::vector<coordinate_input> read_csv(std::string file_name) {
     std::vector<coordinate_input> input_data;
@@ -46,12 +236,12 @@ std::vector<coordinate_input> read_csv(std::string file_name) {
         // Column 1
         std::getline(ss, value, ',');
         doubleVal = std::stod(value);
-        input_data[i].longitude = doubleVal;
+        input_data[i].latitude = doubleVal;
 
         // Column 2
         std::getline(ss, value, ',');
         doubleVal = std::stod(value);
-        input_data[i].latitude = doubleVal;
+        input_data[i].longitude = doubleVal;
 
         // Column 3
         std::getline(ss, value, ',');
@@ -73,15 +263,7 @@ public:
     virtual bool OnInit();
 };
 
-struct GPSCoordinate {
-    double latitude;
-    double longitude;
-};
 
-struct PixelCoordinate {
-    int x;
-    int y;
-};
 
 // Function to convert pixel coordinates to GPS coordinates
 GPSCoordinate pixelToGPS(
@@ -109,9 +291,22 @@ GPSCoordinate pixelToGPS(
 class MyFrame : public wxFrame
 {
 public:
-    MyFrame();
+    MyFrame(const std::vector<coordinate_input>& input_data);
+
+    MapBounds getMapBounds() const { return mapBounds; }
 
 private:
+    std::vector<coordinate_input> m_inputData;
+    int m_transparencyMethod = 1;
+
+    MapBounds mapBounds= {
+    { -37.673467, 144.900807 }, // topLeft
+    { -37.675475, 145.244541 }, // topRight
+    { -37.933589, 144.913295 }, // bottomLeft
+    { -37.931713, 145.237128 }  // bottomRight
+    };
+
+
     void OnPaint(wxPaintEvent& event);
     void OnHello(wxCommandEvent& event);
     void OnExit(wxCommandEvent& event);
@@ -122,8 +317,13 @@ private:
     void OnMouseMove(wxMouseEvent& event);    // For panning the map
     void OnMouseUp(wxMouseEvent& event);      // For ending panning
     void OnMouseClick(wxMouseEvent& event);   // For outputting coordinates on click
+    void PrepareColourmapWithTransparency();
+    void SetTransparencyMethod(int method);
+    void OnTransparencyMethod1(wxCommandEvent& event);
+    void OnTransparencyMethod2(wxCommandEvent& event);
 
     wxBitmap m_backgroundImage;  // Bitmap to store the background image
+    wxBitmap m_colourmap;  // Bitmap to store the background image
 
     double m_zoomLevel = 1.0;                // Zoom factor
     wxPoint m_panOffset = wxPoint(0, 0);     // Offset for panning
@@ -134,28 +334,136 @@ private:
 
 enum
 {
-    ID_Hello = 1
+    ID_Hello = 1,
+    ID_TRANSPARENCY_METHOD1,
+    ID_TRANSPARENCY_METHOD2
 };
 
 wxIMPLEMENT_APP(MyApp);
 
 bool MyApp::OnInit()
 {
+
+    const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/test_coords.csv";
+    PixelCoordinate data_point;
+    GPSCoordinate gps;
+    MapBounds mapBounds = {
+    { -37.673467, 144.900807 }, // topLeft
+    { -37.675475, 145.244541 }, // topRight
+    { -37.933589, 144.913295 }, // bottomLeft
+    { -37.931713, 145.237128 }  // bottomRight
+    };
+
+    int image_width = 1448;
+    int image_height = 1340;
+    
+
+
+    //image_data.resize(image_height, std::vector<pixel_data>(image_width));
+    //update
+    //std::vector<DataPoint> data = readCSV(filename);
+    std::vector<coordinate_input> input_data;
+    input_data = read_csv(filename_input);
+    //for (int i = 0; i < input_data.size(); i++)
+    //{
+    //    std::cout << input_data[i].longitude << std::endl;
+    //}
+
+   
+
     wxImage::AddHandler(new wxPNGHandler);  // Add PNG image handler
 
-    MyFrame* frame = new MyFrame();
+    MyFrame* frame = new MyFrame(input_data);
     frame->SetClientSize(800, 600);
     frame->Show(true);
     return true;
 }
 
-MyFrame::MyFrame()
-    : wxFrame(NULL, wxID_ANY, "Michael's Commute Optimiser")
+void MyFrame::PrepareColourmapWithTransparency()
 {
+    wxImage colourmapImage = m_colourmap.ConvertToImage();
+    int image_width = colourmapImage.GetWidth();
+    int image_height = colourmapImage.GetHeight();
+    GPSCoordinate gps;
+
+    std::cout << m_inputData[0].longitude << std::endl;
+    PixelCoordinate data_point;
+    std::vector<std::vector<pixel_data>> image_data(image_width, std::vector<pixel_data>(image_height));
+
+    for (int i = 0; i < image_width; ++i) { // Loop over rows
+        for (int j = 0; j < image_height; ++j) { // Loop over elements in the row
+            data_point = { i, j };
+            gps = pixelToGPS(data_point, image_width, image_height, mapBounds.topLeft, mapBounds.topRight, mapBounds.bottomLeft, mapBounds.bottomRight);
+            image_data[i][j].value = interpolate_closest_three_points(m_inputData, gps.latitude, gps.longitude);
+            image_data[i][j].colour = (image_data[i][j].value / 100.00) * 200;
+        }
+    }
+    
+    if (!colourmapImage.HasAlpha())
+    {
+        colourmapImage.InitAlpha();
+    }
+
+    for (int x = 0; x < colourmapImage.GetWidth(); ++x)
+    {
+        for (int y = 0; y < colourmapImage.GetHeight(); ++y)
+        {
+            unsigned char red = 255;
+            unsigned char green = 0;
+            unsigned char blue = 0;
+            unsigned char alpha;
+            
+            // Different transparency methods
+            if (m_transparencyMethod == 1)
+            {
+                alpha = 128; // 50% transparency
+                alpha = image_data[x][y].colour;
+            }
+            else // method 2
+            {
+                alpha = 64;  // 75% transparency
+            }
+            
+            colourmapImage.SetRGB(x, y, red, green, blue);
+            colourmapImage.SetAlpha(x, y, alpha);
+        }
+    }
+
+    m_colourmap = wxBitmap(colourmapImage);
+}
+
+void MyFrame::SetTransparencyMethod(int method)
+{
+    m_transparencyMethod = method;
+    PrepareColourmapWithTransparency();  // Apply the new transparency method
+
+    // Trigger a repaint after setting transparency
+    Refresh();
+}
+
+void MyFrame::OnTransparencyMethod1(wxCommandEvent& event)
+{
+    SetTransparencyMethod(1);  // Apply transparency method 1
+}
+
+void MyFrame::OnTransparencyMethod2(wxCommandEvent& event)
+{
+    SetTransparencyMethod(2);  // Apply transparency method 2
+}
+
+MyFrame::MyFrame(const std::vector<coordinate_input>& input_data)
+    : wxFrame(NULL, wxID_ANY, "Michael's Commute Optimiser"),
+    m_inputData(input_data)
+{
+    // Initialize mapBounds in the constructor
+    
     // Set the background style to wxBG_STYLE_PAINT
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     // Load the background image (change path to your image file)
     m_backgroundImage.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map.png", wxBITMAP_TYPE_PNG);
+    m_colourmap = wxBitmap(m_backgroundImage.GetWidth(), m_backgroundImage.GetHeight(), 32);
+    PrepareColourmapWithTransparency();
+    //m_colourmap.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map2.png", wxBITMAP_TYPE_PNG);
 
     Bind(wxEVT_PAINT, &MyFrame::OnPaint, this);
     Bind(wxEVT_MOUSEWHEEL, &MyFrame::OnMouseWheel, this);
@@ -173,14 +481,23 @@ MyFrame::MyFrame()
     wxMenu* menuHelp = new wxMenu;
     menuHelp->Append(wxID_ABOUT);
 
+    wxMenu* menuTransparency = new wxMenu;
+    menuTransparency->Append(ID_TRANSPARENCY_METHOD1, "&Transparency Method 1");
+    menuTransparency->Append(ID_TRANSPARENCY_METHOD2, "&Transparency Method 2");
+
     wxMenuBar* menuBar = new wxMenuBar;
     menuBar->Append(menuFile, "&File");
+    menuBar->Append(menuTransparency, "&Transparency");
     menuBar->Append(menuHelp, "&Help");
 
     SetMenuBar(menuBar);
 
     CreateStatusBar();
     SetStatusText("Welcome to wxWidgets!");
+
+    // Bind events for transparency menu options
+    Bind(wxEVT_MENU, &MyFrame::OnTransparencyMethod1, this, ID_TRANSPARENCY_METHOD1);
+    Bind(wxEVT_MENU, &MyFrame::OnTransparencyMethod2, this, ID_TRANSPARENCY_METHOD2);
 
     Bind(wxEVT_MENU, &MyFrame::OnHello, this, ID_Hello);
     Bind(wxEVT_MENU, &MyFrame::OnAbout, this, wxID_ABOUT);
@@ -197,6 +514,7 @@ void MyFrame::OnPaint(wxPaintEvent& event)
     dc.DrawRectangle(0, 0, GetClientSize().x, GetClientSize().y);  // Fill entire window with black
 
     if (m_backgroundImage.IsOk())
+    //if(1==0)
     {
         // Scale the image according to zoom level
         wxImage scaledImage = m_backgroundImage.ConvertToImage();
@@ -207,6 +525,17 @@ void MyFrame::OnPaint(wxPaintEvent& event)
         // Draw the scaled and panned image
         dc.DrawBitmap(scaledBitmap, m_panOffset.x, m_panOffset.y, false);
     }
+    if (m_colourmap.IsOk())
+    {
+        // Scale the heat map overlay according to zoom level
+        wxImage scaledHeatMap = m_colourmap.ConvertToImage();
+        scaledHeatMap.Rescale(m_colourmap.GetWidth() * m_zoomLevel, m_colourmap.GetHeight() * m_zoomLevel);
+        wxBitmap scaledHeatMapBitmap(scaledHeatMap);
+
+        // Draw the scaled and panned heat map overlay with transparency enabled
+        dc.DrawBitmap(scaledHeatMapBitmap, m_panOffset.x, m_panOffset.y, true);
+    }
+
 }
 
 void MyFrame::OnMouseWheel(wxMouseEvent& event)
@@ -243,8 +572,6 @@ void MyFrame::OnMouseClick(wxMouseEvent& event)
     double scaledX = mousePos.x / m_zoomLevel;
     double scaledY = mousePos.y / m_zoomLevel;
 
-
-
 }
 
 void MyFrame::OnLeftMouseDown(wxMouseEvent& event)
@@ -279,15 +606,15 @@ void MyFrame::OnRightMouseDown(wxMouseEvent& event)
         // Output the coordinates
         PixelCoordinate MouseClick = { scaledX, scaledY };
 
-        GPSCoordinate topLeft = { -37.673467 ,144.900807 };
-        GPSCoordinate topRight = { -37.675475, 145.244541 };
-        GPSCoordinate bottomLeft = { -37.933589, 144.913295 };
-        GPSCoordinate bottomRight = { -37.931713, 145.237128 };
+        GPSCoordinate topLeft = mapBounds.topLeft;
+        GPSCoordinate topRight = mapBounds.topRight;
+        GPSCoordinate bottomLeft = mapBounds.bottomLeft;
+        GPSCoordinate bottomRight = mapBounds.bottomRight;
 
-        GPSCoordinate gps = pixelToGPS(MouseClick, 600, 500, topLeft, topRight, bottomLeft, bottomRight);
-
+        GPSCoordinate gps = pixelToGPS(MouseClick, 1448, 1340, topLeft, topRight, bottomLeft, bottomRight);
+        double value = interpolate_closest_three_points(m_inputData, gps.latitude, gps.longitude);
         // Output the coordinates
-        wxLogMessage("Mouse clickexxxxd at: (%.2f, %.2f)", gps.latitude, gps.longitude);
+        wxLogMessage("Mouse clicked at: (%i, %i) (%.2f, %.2f). Travel time %.8f", MouseClick.x, MouseClick.y, gps.latitude, gps.longitude, value);
     }
 
 }
