@@ -14,12 +14,15 @@
 #include <string>
 #include <vector>
 #include <limits>
+#include <iostream>
+#include <thread>  // For std::this_thread::sleep_for
+#include <chrono>  // For std::chrono::seconds
+
 
 struct coordinate_input {
     double latitude;
     double longitude;
     double time;
-
 };
 
 struct pixel_data {
@@ -250,7 +253,6 @@ private:
     wxPoint m_lastMousePos;                  // Stores the last mouse position for panning
 
     bool m_isPanning = false;                // Flag for panning mode
-
 };
 
 enum
@@ -302,6 +304,7 @@ bool MyApp::OnInit()
 
 void MyFrame::PrepareColourmapWithTransparency()
 {
+    std::cout << m_inputData[0].longitude << std::endl;
     wxImage colourmapImage = m_colourmap.ConvertToImage();
     if (!colourmapImage.HasAlpha())
     {
@@ -316,7 +319,7 @@ void MyFrame::PrepareColourmapWithTransparency()
             unsigned char green = 0;
             unsigned char blue = 0;
             unsigned char alpha;
-
+            
             // Different transparency methods
             if (m_transparencyMethod == 1)
             {
@@ -326,7 +329,7 @@ void MyFrame::PrepareColourmapWithTransparency()
             {
                 alpha = 64;  // 75% transparency
             }
-
+            
             colourmapImage.SetRGB(x, y, red, green, blue);
             colourmapImage.SetAlpha(x, y, alpha);
         }
@@ -406,7 +409,6 @@ MyFrame::MyFrame(const std::vector<coordinate_input>& input_data)
     Bind(wxEVT_MENU, &MyFrame::OnAbout, this, wxID_ABOUT);
     Bind(wxEVT_MENU, &MyFrame::OnExit, this, wxID_EXIT);
 }
-
 
 void MyFrame::OnPaint(wxPaintEvent& event)
 {
