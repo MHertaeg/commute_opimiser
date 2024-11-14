@@ -22,12 +22,12 @@
             GPSCoordinate bottomRight = mapBounds.bottomRight;
             PixelCoordinate MouseClick = { 0, 0 };
 
-            GPSCoordinate gps = pixelToGPS(MouseClick, 1000, 500, topLeft, topRight, bottomLeft, bottomRight);
+            GPSCoordinate gps = pixelToGPS(MouseClick, 1448, 1340, topLeft, topRight, bottomLeft, bottomRight);
             //std::cout << gps.latitude << " , " << gps.longitude << std::endl;
             
 
             //double value = interpolate(m_inputData, gps.latitude, gps.longitude);
-            double value = linear_interpolate_closest_points(m_inputData, -38.34, 145.42);
+            double value = interpolate_closest_three_points(m_inputData, -37.931713, 145.237128);
 
             std::cout << value;
         }

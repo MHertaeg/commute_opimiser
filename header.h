@@ -58,56 +58,133 @@ double linear_interpolate(const coordinate_input& p1, const coordinate_input& p2
     // Calculate the distance between the two points
     double dist1 = std::sqrt(std::pow(p1.latitude - latitude, 2) + std::pow(p1.longitude - longitude, 2));
     double dist2 = std::sqrt(std::pow(p2.latitude - latitude, 2) + std::pow(p2.longitude - longitude, 2));
-    std::cout << "distance   " << dist1 << " , " << dist2 << std::endl;
+    //std::cout << "distance   " << dist1 << " , " << dist2 << std::endl;
     // Linear interpolation formula
     double weight1 = 1.0 / dist1;
     double weight2 = 1.0 / dist2;
 
-    double interpolated_time = (p1.time * weight2 + p2.time * weight1) / (weight1 + weight2);
+    double interpolated_time = (p1.time * weight1 + p2.time * weight2) / (weight1 + weight2);
     return interpolated_time;
 }
 
-double linear_interpolate_closest_points(const std::vector<coordinate_input>& input_data, double latitude, double longitude) {
-    // Ensure we have at least two points to interpolate
-    if (input_data.size() < 2) {
-        throw std::invalid_argument("At least two points are required for interpolation.");
+
+std::vector<coordinate_input> find_closest_three_points(const std::vector<coordinate_input>& input_data, double latitude, double longitude) {
+    // Ensure we have at least three points
+    if (input_data.size() < 3) {
+        throw std::invalid_argument("At least three points are required for interpolation.");
     }
 
-    // Initialize the closest points with the first two points
-    coordinate_input closest_point1 = input_data[0];
-    coordinate_input closest_point2 = input_data[1];
+    // Initialize the closest points with the first three points
+    std::vector<coordinate_input> closest_points = { input_data[0], input_data[1], input_data[2] };
+    std::vector<double> min_dists = {
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max()
+    };
 
-    // Initialize distances for the two closest points
-    double min_dist1 = std::numeric_limits<double>::max();
-    double min_dist2 = std::numeric_limits<double>::max();
-
-    // Find the two closest points
+    // Find the three closest points
     for (const auto& point : input_data) {
         double dist = std::sqrt(std::pow(point.latitude - latitude, 2) + std::pow(point.longitude - longitude, 2));
 
-        // Check if this point is closer than the first closest
-        if (dist < min_dist1) {
-            min_dist2 = min_dist1;
-            closest_point2 = closest_point1;
-            min_dist1 = dist;
-            closest_point1 = point;
+        // Update the closest points if necessary
+        if (dist < min_dists[0]) {
+            // Shift everything one position
+            min_dists[2] = min_dists[1];
+            min_dists[1] = min_dists[0];
+            min_dists[0] = dist;
+
+            closest_points[2] = closest_points[1];
+            closest_points[1] = closest_points[0];
+            closest_points[0] = point;
         }
-        // Check if this point is closer than the second closest
-        else if (dist < min_dist2) {
-            min_dist2 = dist;
-            closest_point2 = point;
+        else if (dist < min_dists[1]) {
+            // Shift second to third
+            min_dists[2] = min_dists[1];
+            min_dists[1] = dist;
+
+            closest_points[2] = closest_points[1];
+            closest_points[1] = point;
+        }
+        else if (dist < min_dists[2]) {
+            min_dists[2] = dist;
+            closest_points[2] = point;
         }
     }
-    std::cout << "Closest Point 1: Latitude = " << closest_point1.latitude
-        << ", Longitude = " << closest_point1.longitude
-        << ", Time = " << closest_point1.time << std::endl;
 
-    std::cout << "Closest Point 2: Latitude = " << closest_point2.latitude
-        << ", Longitude = " << closest_point2.longitude
-        << ", Time = " << closest_point2.time << std::endl;
-    // Perform linear interpolation between the two closest points
-    return linear_interpolate(closest_point1, closest_point2, latitude, longitude);
-}
+    /*
+    // Debug output
+    for (size_t i = 0; i < 3; ++i) {
+        std::cout << "Closest Point " << (i+1) << ": Latitude = " << closest_points[i].latitude
+                  << ", Longitude = " << closest_points[i].longitude
+                  << ", Time = " << closest_points[i].time
+                  << ", Distance = " << min_dists[i] << std::endl;
+    }
+    */
+
+    return closest_points;
+};
+    double interpolate_closest_three_points(const std::vector<coordinate_input>&input_data, double latitude, double longitude) {
+        auto closest_points = find_closest_three_points(input_data, latitude, longitude);
+
+        // Here you can implement your preferred interpolation method using these three points
+        // For now, let's use a simple weighted average based on inverse distance
+        double total_weight = 0.0;
+        double weighted_sum = 0.0;
+
+        for (const auto& point : closest_points) {
+            double dist = std::sqrt(std::pow(point.latitude - latitude, 2) +
+                std::pow(point.longitude - longitude, 2));
+            double weight = 1.0 / (dist + 1e-10); // Adding small number to avoid division by zero
+            weighted_sum += point.time * weight;
+            total_weight += weight;
+        }
+
+        return weighted_sum / total_weight;
+    };
+
+    double linear_interpolate_closest_points(const std::vector<coordinate_input>& input_data, double latitude, double longitude) {
+        // Ensure we have at least two points to interpolate
+        if (input_data.size() < 2) {
+            throw std::invalid_argument("At least two points are required for interpolation.");
+        }
+
+        // Initialize the closest points with the first two points
+        coordinate_input closest_point1 = input_data[0];
+        coordinate_input closest_point2 = input_data[1];
+
+        // Initialize distances for the two closest points
+        double min_dist1 = std::numeric_limits<double>::max();
+        double min_dist2 = std::numeric_limits<double>::max();
+
+        // Find the two closest points
+        for (const auto& point : input_data) {
+            double dist = std::sqrt(std::pow(point.latitude - latitude, 2) + std::pow(point.longitude - longitude, 2));
+
+            // Check if this point is closer than the first closest
+            if (dist < min_dist1) {
+                min_dist2 = min_dist1;
+                closest_point2 = closest_point1;
+                min_dist1 = dist;
+                closest_point1 = point;
+            }
+            // Check if this point is closer than the second closest
+            else if (dist < min_dist2) {
+                min_dist2 = dist;
+                closest_point2 = point;
+            }
+        }
+        /*
+        std::cout << "Closest Point 1: Latitude = " << closest_point1.latitude
+            << ", Longitude = " << closest_point1.longitude
+            << ", Time = " << closest_point1.time << std::endl;
+
+        std::cout << "Closest Point 2: Latitude = " << closest_point2.latitude
+            << ", Longitude = " << closest_point2.longitude
+            << ", Time = " << closest_point2.time << std::endl;
+            */
+            // Perform linear interpolation between the two closest points
+        return linear_interpolate(closest_point1, closest_point2, latitude, longitude);
+    };
 
 
 double interpolate(std::vector<coordinate_input> input_data, double latitude, double longitude) {
@@ -304,8 +381,24 @@ bool MyApp::OnInit()
 
 void MyFrame::PrepareColourmapWithTransparency()
 {
-    std::cout << m_inputData[0].longitude << std::endl;
     wxImage colourmapImage = m_colourmap.ConvertToImage();
+    int image_width = colourmapImage.GetWidth();
+    int image_height = colourmapImage.GetHeight();
+    GPSCoordinate gps;
+
+    std::cout << m_inputData[0].longitude << std::endl;
+    PixelCoordinate data_point;
+    std::vector<std::vector<pixel_data>> image_data(image_width, std::vector<pixel_data>(image_height));
+
+    for (int i = 0; i < image_width; ++i) { // Loop over rows
+        for (int j = 0; j < image_height; ++j) { // Loop over elements in the row
+            data_point = { i, j };
+            gps = pixelToGPS(data_point, image_width, image_height, mapBounds.topLeft, mapBounds.topRight, mapBounds.bottomLeft, mapBounds.bottomRight);
+            image_data[i][j].value = interpolate_closest_three_points(m_inputData, gps.latitude, gps.longitude);
+            image_data[i][j].colour = (image_data[i][j].value / 100.00) * 200;
+        }
+    }
+    
     if (!colourmapImage.HasAlpha())
     {
         colourmapImage.InitAlpha();
@@ -324,6 +417,7 @@ void MyFrame::PrepareColourmapWithTransparency()
             if (m_transparencyMethod == 1)
             {
                 alpha = 128; // 50% transparency
+                alpha = image_data[x][y].colour;
             }
             else // method 2
             {
@@ -518,9 +612,9 @@ void MyFrame::OnRightMouseDown(wxMouseEvent& event)
         GPSCoordinate bottomRight = mapBounds.bottomRight;
 
         GPSCoordinate gps = pixelToGPS(MouseClick, 1448, 1340, topLeft, topRight, bottomLeft, bottomRight);
-        double value = linear_interpolate_closest_points(m_inputData, gps.latitude, gps.longitude);
+        double value = interpolate_closest_three_points(m_inputData, gps.latitude, gps.longitude);
         // Output the coordinates
-        wxLogMessage("Mouse clicked at: (%.2f, %.2f). Travel time %.3f", gps.latitude, gps.longitude, value);
+        wxLogMessage("Mouse clicked at: (%i, %i) (%.2f, %.2f). Travel time %.8f", MouseClick.x, MouseClick.y, gps.latitude, gps.longitude, value);
     }
 
 }
