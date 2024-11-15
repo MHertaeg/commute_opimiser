@@ -699,7 +699,7 @@ void MyFrame::OnRightMouseDown(wxMouseEvent& event)
         double value_TT_max = interpolate_closest_three_points(m_inputData.input_data_TT_max, gps.latitude, gps.longitude);
         double value_TT_min = interpolate_closest_three_points(m_inputData.input_data_TT_min, gps.latitude, gps.longitude);
         // Output the coordinates
-        wxLogMessage("Mouse clicked at: (%i, %i) (%.2f, %.2f). Travel time %.8f", MouseClick.x, MouseClick.y, gps.latitude, gps.longitude, value_csl_min);
+        wxLogMessage("Minutes to to CSL %.2f -  %.2f \n Minutes to TT %.2f -  %.2f \n Coordinates (%.2f, %.2f) ", value_csl_min, value_csl_max, value_TT_min, value_TT_max, gps.latitude, gps.longitude);
     }
 
 }
