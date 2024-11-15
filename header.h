@@ -47,7 +47,12 @@ struct MapBounds {
     GPSCoordinate bottomLeft;
     GPSCoordinate bottomRight;
 };
-
+struct input_data_struct {
+    std::vector<coordinate_input> input_data_csl_max;
+    std::vector<coordinate_input> input_data_csl_min;
+    std::vector<coordinate_input> input_data_TT_max;
+    std::vector<coordinate_input> input_data_TT_min;
+};
 
 double linear_interpolate(const coordinate_input& p1, const coordinate_input& p2, double latitude, double longitude) {
     // Ensure latitude and longitude of the points are different to avoid division by zero
@@ -194,20 +199,92 @@ double interpolate(std::vector<coordinate_input> input_data, double latitude, do
     const double epsilon = 1e-6;
     for (const auto& point : input_data) {
         dist = std::sqrt((point.latitude - latitude) * (point.latitude - latitude) + (point.longitude - longitude) * (point.longitude - longitude));
-        std::cout << "dist" << " , " << dist << std::endl;
+        //std::cout << "dist" << " , " << dist << std::endl;
         if (dist < epsilon) { // Handle case when the point is extremely close
             return point.time;
         }
 
         double weight = 1.0 / dist;
-        std::cout << point.latitude << " , " << point.longitude << " , " << latitude << " , " << longitude << std::endl;
-        std::cout << point.time << " , " << weight << std::endl;
+        //std::cout << point.latitude << " , " << point.longitude << " , " << latitude << " , " << longitude << std::endl;
+        //std::cout << point.time << " , " << weight << std::endl;
         weighted_sum += point.time * weight;
         weight_total += weight;
 
     }
-    std::cout << weighted_sum / weight_total << std::endl;
+    //std::cout << weighted_sum / weight_total << std::endl;
     return (weight_total > 0) ? weighted_sum / weight_total : 0.0;
+};
+
+
+input_data_struct read_csv_full(std::string file_name) {
+    input_data_struct input_data;
+
+    int i = 0;
+    // Open the CSV file
+    std::ifstream file(file_name);
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file." << std::endl;
+        return input_data;
+    }
+
+    std::string line;
+    // Skip the header line (if present)
+    std::getline(file, line);
+
+    // Read each line from the file
+    while (std::getline(file, line)) {
+        input_data.input_data_csl_max.push_back(coordinate_input{});
+        input_data.input_data_csl_min.push_back(coordinate_input{});
+        input_data.input_data_TT_max.push_back(coordinate_input{});
+        input_data.input_data_TT_min.push_back(coordinate_input{});
+        std::stringstream ss(line);
+        std::string value;
+
+        double doubleVal;
+
+        // Column 1
+        std::getline(ss, value, ',');
+        doubleVal = std::stod(value);
+        input_data.input_data_csl_max[i].latitude = doubleVal;
+        input_data.input_data_csl_min[i].latitude = doubleVal;
+        input_data.input_data_TT_max[i].latitude = doubleVal;
+        input_data.input_data_TT_min[i].latitude = doubleVal;
+
+        // Column 2
+        std::getline(ss, value, ',');
+        doubleVal = std::stod(value);
+        input_data.input_data_csl_max[i].longitude = doubleVal;
+        input_data.input_data_csl_min[i].longitude = doubleVal;
+        input_data.input_data_TT_max[i].longitude = doubleVal;
+        input_data.input_data_TT_min[i].longitude = doubleVal;
+
+        // Column 3
+        std::getline(ss, value, ',');
+        doubleVal = std::stod(value);
+        input_data.input_data_TT_min[i].time = doubleVal;
+
+        // Column 4
+        std::getline(ss, value, ',');
+        doubleVal = std::stod(value);
+        input_data.input_data_TT_max[i].time = doubleVal;
+
+        // Column 5
+        std::getline(ss, value, ',');
+        doubleVal = std::stod(value);
+        input_data.input_data_csl_min[i].time = doubleVal;
+
+        // Column 6
+        std::getline(ss, value, ',');
+        doubleVal = std::stod(value);
+        input_data.input_data_csl_max[i].time = doubleVal;
+
+
+        i++;
+    }
+
+    file.close();
+
+    return input_data;
 };
 
 
@@ -291,12 +368,12 @@ GPSCoordinate pixelToGPS(
 class MyFrame : public wxFrame
 {
 public:
-    MyFrame(const std::vector<coordinate_input>& input_data);
+    MyFrame(const input_data_struct& input_data);
 
     MapBounds getMapBounds() const { return mapBounds; }
 
 private:
-    std::vector<coordinate_input> m_inputData;
+    input_data_struct m_inputData;
     int m_transparencyMethod = 1;
 
     MapBounds mapBounds= {
@@ -344,7 +421,8 @@ wxIMPLEMENT_APP(MyApp);
 bool MyApp::OnInit()
 {
 
-    const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/test_coords.csv";
+    const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/coordinates.csv";
+    //const std::string filename_input = "coordinates.csv";
     PixelCoordinate data_point;
     GPSCoordinate gps;
     MapBounds mapBounds = {
@@ -362,8 +440,8 @@ bool MyApp::OnInit()
     //image_data.resize(image_height, std::vector<pixel_data>(image_width));
     //update
     //std::vector<DataPoint> data = readCSV(filename);
-    std::vector<coordinate_input> input_data;
-    input_data = read_csv(filename_input);
+    input_data_struct input_data;
+    input_data = read_csv_full(filename_input);
     //for (int i = 0; i < input_data.size(); i++)
     //{
     //    std::cout << input_data[i].longitude << std::endl;
@@ -385,8 +463,19 @@ void MyFrame::PrepareColourmapWithTransparency()
     int image_width = colourmapImage.GetWidth();
     int image_height = colourmapImage.GetHeight();
     GPSCoordinate gps;
+    std::vector<coordinate_input> input_data_this;
 
-    std::cout << m_inputData[0].longitude << std::endl;
+    if (m_transparencyMethod == 1)
+    {
+        input_data_this = m_inputData.input_data_csl_max;
+    }
+    else
+    {
+        input_data_this = m_inputData.input_data_TT_max;
+
+    };
+
+    //std::cout << input_data_this[0].longitude << std::endl;
     PixelCoordinate data_point;
     std::vector<std::vector<pixel_data>> image_data(image_width, std::vector<pixel_data>(image_height));
 
@@ -394,7 +483,7 @@ void MyFrame::PrepareColourmapWithTransparency()
         for (int j = 0; j < image_height; ++j) { // Loop over elements in the row
             data_point = { i, j };
             gps = pixelToGPS(data_point, image_width, image_height, mapBounds.topLeft, mapBounds.topRight, mapBounds.bottomLeft, mapBounds.bottomRight);
-            image_data[i][j].value = interpolate_closest_three_points(m_inputData, gps.latitude, gps.longitude);
+            image_data[i][j].value = interpolate_closest_three_points(input_data_this, gps.latitude, gps.longitude);
             image_data[i][j].colour = (image_data[i][j].value / 100.00) * 200;
         }
     }
@@ -414,15 +503,8 @@ void MyFrame::PrepareColourmapWithTransparency()
             unsigned char alpha;
             
             // Different transparency methods
-            if (m_transparencyMethod == 1)
-            {
-                alpha = 128; // 50% transparency
-                alpha = image_data[x][y].colour;
-            }
-            else // method 2
-            {
-                alpha = 64;  // 75% transparency
-            }
+
+            alpha = image_data[x][y].colour;
             
             colourmapImage.SetRGB(x, y, red, green, blue);
             colourmapImage.SetAlpha(x, y, alpha);
@@ -451,7 +533,7 @@ void MyFrame::OnTransparencyMethod2(wxCommandEvent& event)
     SetTransparencyMethod(2);  // Apply transparency method 2
 }
 
-MyFrame::MyFrame(const std::vector<coordinate_input>& input_data)
+MyFrame::MyFrame(const input_data_struct& input_data)
     : wxFrame(NULL, wxID_ANY, "Michael's Commute Optimiser"),
     m_inputData(input_data)
 {
@@ -461,6 +543,7 @@ MyFrame::MyFrame(const std::vector<coordinate_input>& input_data)
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     // Load the background image (change path to your image file)
     m_backgroundImage.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map.png", wxBITMAP_TYPE_PNG);
+    //m_backgroundImage.LoadFile("map.png", wxBITMAP_TYPE_PNG);
     m_colourmap = wxBitmap(m_backgroundImage.GetWidth(), m_backgroundImage.GetHeight(), 32);
     PrepareColourmapWithTransparency();
     //m_colourmap.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map2.png", wxBITMAP_TYPE_PNG);
@@ -482,18 +565,18 @@ MyFrame::MyFrame(const std::vector<coordinate_input>& input_data)
     menuHelp->Append(wxID_ABOUT);
 
     wxMenu* menuTransparency = new wxMenu;
-    menuTransparency->Append(ID_TRANSPARENCY_METHOD1, "&Transparency Method 1");
-    menuTransparency->Append(ID_TRANSPARENCY_METHOD2, "&Transparency Method 2");
+    menuTransparency->Append(ID_TRANSPARENCY_METHOD1, "&Sherilyn's Commute");
+    menuTransparency->Append(ID_TRANSPARENCY_METHOD2, "&Michael's Commute");
 
     wxMenuBar* menuBar = new wxMenuBar;
     menuBar->Append(menuFile, "&File");
-    menuBar->Append(menuTransparency, "&Transparency");
+    menuBar->Append(menuTransparency, "&Visualisations");
     menuBar->Append(menuHelp, "&Help");
 
     SetMenuBar(menuBar);
 
-    CreateStatusBar();
-    SetStatusText("Welcome to wxWidgets!");
+    //CreateStatusBar();
+    //SetStatusText("Welcome to wxWidgets!");
 
     // Bind events for transparency menu options
     Bind(wxEVT_MENU, &MyFrame::OnTransparencyMethod1, this, ID_TRANSPARENCY_METHOD1);
@@ -571,7 +654,6 @@ void MyFrame::OnMouseClick(wxMouseEvent& event)
     // Apply the zoom factor to adjust the coordinates based on the zoom level
     double scaledX = mousePos.x / m_zoomLevel;
     double scaledY = mousePos.y / m_zoomLevel;
-
 }
 
 void MyFrame::OnLeftMouseDown(wxMouseEvent& event)
@@ -612,9 +694,12 @@ void MyFrame::OnRightMouseDown(wxMouseEvent& event)
         GPSCoordinate bottomRight = mapBounds.bottomRight;
 
         GPSCoordinate gps = pixelToGPS(MouseClick, 1448, 1340, topLeft, topRight, bottomLeft, bottomRight);
-        double value = interpolate_closest_three_points(m_inputData, gps.latitude, gps.longitude);
+        double value_csl_min = interpolate_closest_three_points(m_inputData.input_data_csl_min, gps.latitude, gps.longitude);
+        double value_csl_max = interpolate_closest_three_points(m_inputData.input_data_csl_max, gps.latitude, gps.longitude);
+        double value_TT_max = interpolate_closest_three_points(m_inputData.input_data_TT_max, gps.latitude, gps.longitude);
+        double value_TT_min = interpolate_closest_three_points(m_inputData.input_data_TT_min, gps.latitude, gps.longitude);
         // Output the coordinates
-        wxLogMessage("Mouse clicked at: (%i, %i) (%.2f, %.2f). Travel time %.8f", MouseClick.x, MouseClick.y, gps.latitude, gps.longitude, value);
+        wxLogMessage("Mouse clicked at: (%i, %i) (%.2f, %.2f). Travel time %.8f", MouseClick.x, MouseClick.y, gps.latitude, gps.longitude, value_csl_min);
     }
 
 }
