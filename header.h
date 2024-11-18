@@ -458,6 +458,18 @@ bool MyApp::OnInit()
     frame->Show(true);
     return true;
 }
+double find_maximum(std::vector<coordinate_input> input_data_this)
+{
+    double max_time = 0;
+    for (int i = 0; i < input_data_this.size(); i++)
+    {
+        if (input_data_this[i].time > max_time)
+        {
+            max_time = input_data_this[i].time;
+        };
+    };
+    return max_time;
+};
 
 void MyFrame::PrepareColourmapWithTransparency()
 {
@@ -466,15 +478,15 @@ void MyFrame::PrepareColourmapWithTransparency()
     int image_height = colourmapImage.GetHeight();
     GPSCoordinate gps;
     std::vector<coordinate_input> input_data_this;
-
+    double saturation_time = 115;
     if (m_transparencyMethod == 1)
     {
-        input_data_this = m_inputData.input_data_csl_max;
+        input_data_this = m_inputData.input_data_csl_min;
     };
 
     if(m_transparencyMethod == 2)
     {
-        input_data_this = m_inputData.input_data_TT_max;
+        input_data_this = m_inputData.input_data_TT_min;
     };
 
     if (m_transparencyMethod == 3)
@@ -483,10 +495,12 @@ void MyFrame::PrepareColourmapWithTransparency()
         for (int i = 0; i < m_inputData.input_data_TT_max.size(); i++)
         {
             //std::cout << i << std::endl;
-            input_data_this[i].longitude = m_inputData.input_data_TT_max[i].longitude;
-            input_data_this[i].latitude = m_inputData.input_data_TT_max[i].latitude;
-            input_data_this[i].time = m_inputData.input_data_TT_max[i].time + m_inputData.input_data_csl_max[i].time;
+            input_data_this[i].longitude = m_inputData.input_data_TT_min[i].longitude;
+            input_data_this[i].latitude = m_inputData.input_data_TT_min[i].latitude;
+            input_data_this[i].time = m_inputData.input_data_TT_min[i].time + m_inputData.input_data_csl_min[i].time;
+            //std::cout << input_data_this[i].time << std::endl;
         }
+        saturation_time = 200;
     };
 
     //std::cout << input_data_this[0].longitude << std::endl;
@@ -498,7 +512,18 @@ void MyFrame::PrepareColourmapWithTransparency()
             data_point = { i, j };
             gps = pixelToGPS(data_point, image_width, image_height, mapBounds.topLeft, mapBounds.topRight, mapBounds.bottomLeft, mapBounds.bottomRight);
             image_data[i][j].value = interpolate_closest_three_points(input_data_this, gps.latitude, gps.longitude);
-            image_data[i][j].colour = (image_data[i][j].value / 200.00) * 200;
+            if (m_transparencyMethod == 3)
+            {
+                image_data[i][j].colour = ((image_data[i][j].value - 100) / 50) * 230.0;
+            }
+            else
+            {
+                image_data[i][j].colour = ((image_data[i][j].value) / saturation_time) * 230.0;
+            };
+            if (image_data[i][j].colour > 230.0)
+            {
+                image_data[i][j].colour = 230;
+            };
         }
     }
     

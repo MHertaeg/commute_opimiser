@@ -6,7 +6,6 @@ coordinates.xlsx
 bin/
 obj/
 Debug/
-Release/
 x64/
 commute/
 x86/
