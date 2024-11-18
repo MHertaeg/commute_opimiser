@@ -423,8 +423,8 @@ wxIMPLEMENT_APP(MyApp);
 bool MyApp::OnInit()
 {
 
-    const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/coordinates.csv";
-    //const std::string filename_input = "coordinates.csv";
+    //const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/coordinates.csv";
+    const std::string filename_input = "coordinates.csv";
     PixelCoordinate data_point;
     GPSCoordinate gps;
     MapBounds mapBounds = {
@@ -586,8 +586,8 @@ MyFrame::MyFrame(const input_data_struct& input_data)
     // Set the background style to wxBG_STYLE_PAINT
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     // Load the background image (change path to your image file)
-    m_backgroundImage.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map.png", wxBITMAP_TYPE_PNG);
-    //m_backgroundImage.LoadFile("map.png", wxBITMAP_TYPE_PNG);
+    //m_backgroundImage.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map.png", wxBITMAP_TYPE_PNG);
+    m_backgroundImage.LoadFile("map.png", wxBITMAP_TYPE_PNG);
     m_colourmap = wxBitmap(m_backgroundImage.GetWidth(), m_backgroundImage.GetHeight(), 32);
     PrepareColourmapWithTransparency();
     //m_colourmap.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map2.png", wxBITMAP_TYPE_PNG);
