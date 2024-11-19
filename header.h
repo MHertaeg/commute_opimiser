@@ -398,6 +398,7 @@ private:
     void SetTransparencyMethod(int method);
     void OnTransparencyMethod1(wxCommandEvent& event);
     void OnTransparencyMethod2(wxCommandEvent& event);
+    void OnTransparencyMethod3(wxCommandEvent& event);
 
     wxBitmap m_backgroundImage;  // Bitmap to store the background image
     wxBitmap m_colourmap;  // Bitmap to store the background image
@@ -413,7 +414,8 @@ enum
 {
     ID_Hello = 1,
     ID_TRANSPARENCY_METHOD1,
-    ID_TRANSPARENCY_METHOD2
+    ID_TRANSPARENCY_METHOD2,
+    ID_TRANSPARENCY_METHOD3
 };
 
 wxIMPLEMENT_APP(MyApp);
@@ -421,8 +423,8 @@ wxIMPLEMENT_APP(MyApp);
 bool MyApp::OnInit()
 {
 
-    const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/coordinates.csv";
-    //const std::string filename_input = "coordinates.csv";
+    //const std::string filename_input = "C:/Users/michael.h_chemwatch/source/repos/commute/coordinates.csv";
+    const std::string filename_input = "coordinates.csv";
     PixelCoordinate data_point;
     GPSCoordinate gps;
     MapBounds mapBounds = {
@@ -456,6 +458,18 @@ bool MyApp::OnInit()
     frame->Show(true);
     return true;
 }
+double find_maximum(std::vector<coordinate_input> input_data_this)
+{
+    double max_time = 0;
+    for (int i = 0; i < input_data_this.size(); i++)
+    {
+        if (input_data_this[i].time > max_time)
+        {
+            max_time = input_data_this[i].time;
+        };
+    };
+    return max_time;
+};
 
 void MyFrame::PrepareColourmapWithTransparency()
 {
@@ -464,15 +478,29 @@ void MyFrame::PrepareColourmapWithTransparency()
     int image_height = colourmapImage.GetHeight();
     GPSCoordinate gps;
     std::vector<coordinate_input> input_data_this;
-
+    double saturation_time = 115;
     if (m_transparencyMethod == 1)
     {
-        input_data_this = m_inputData.input_data_csl_max;
-    }
-    else
-    {
-        input_data_this = m_inputData.input_data_TT_max;
+        input_data_this = m_inputData.input_data_csl_min;
+    };
 
+    if(m_transparencyMethod == 2)
+    {
+        input_data_this = m_inputData.input_data_TT_min;
+    };
+
+    if (m_transparencyMethod == 3)
+    {
+        input_data_this.resize(m_inputData.input_data_TT_max.size());
+        for (int i = 0; i < m_inputData.input_data_TT_max.size(); i++)
+        {
+            //std::cout << i << std::endl;
+            input_data_this[i].longitude = m_inputData.input_data_TT_min[i].longitude;
+            input_data_this[i].latitude = m_inputData.input_data_TT_min[i].latitude;
+            input_data_this[i].time = m_inputData.input_data_TT_min[i].time + m_inputData.input_data_csl_min[i].time;
+            //std::cout << input_data_this[i].time << std::endl;
+        }
+        saturation_time = 200;
     };
 
     //std::cout << input_data_this[0].longitude << std::endl;
@@ -484,7 +512,18 @@ void MyFrame::PrepareColourmapWithTransparency()
             data_point = { i, j };
             gps = pixelToGPS(data_point, image_width, image_height, mapBounds.topLeft, mapBounds.topRight, mapBounds.bottomLeft, mapBounds.bottomRight);
             image_data[i][j].value = interpolate_closest_three_points(input_data_this, gps.latitude, gps.longitude);
-            image_data[i][j].colour = (image_data[i][j].value / 100.00) * 200;
+            if (m_transparencyMethod == 3)
+            {
+                image_data[i][j].colour = ((image_data[i][j].value - 100) / 50) * 230.0;
+            }
+            else
+            {
+                image_data[i][j].colour = ((image_data[i][j].value) / saturation_time) * 230.0;
+            };
+            if (image_data[i][j].colour > 230.0)
+            {
+                image_data[i][j].colour = 230;
+            };
         }
     }
     
@@ -533,6 +572,11 @@ void MyFrame::OnTransparencyMethod2(wxCommandEvent& event)
     SetTransparencyMethod(2);  // Apply transparency method 2
 }
 
+void MyFrame::OnTransparencyMethod3(wxCommandEvent& event)
+{
+    SetTransparencyMethod(3);  // Apply transparency method 2
+}
+
 MyFrame::MyFrame(const input_data_struct& input_data)
     : wxFrame(NULL, wxID_ANY, "Michael's Commute Optimiser"),
     m_inputData(input_data)
@@ -542,8 +586,8 @@ MyFrame::MyFrame(const input_data_struct& input_data)
     // Set the background style to wxBG_STYLE_PAINT
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     // Load the background image (change path to your image file)
-    m_backgroundImage.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map.png", wxBITMAP_TYPE_PNG);
-    //m_backgroundImage.LoadFile("map.png", wxBITMAP_TYPE_PNG);
+    //m_backgroundImage.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map.png", wxBITMAP_TYPE_PNG);
+    m_backgroundImage.LoadFile("map.png", wxBITMAP_TYPE_PNG);
     m_colourmap = wxBitmap(m_backgroundImage.GetWidth(), m_backgroundImage.GetHeight(), 32);
     PrepareColourmapWithTransparency();
     //m_colourmap.LoadFile("C:/Users/michael.h_chemwatch/source/repos/commute/map2.png", wxBITMAP_TYPE_PNG);
@@ -567,6 +611,7 @@ MyFrame::MyFrame(const input_data_struct& input_data)
     wxMenu* menuTransparency = new wxMenu;
     menuTransparency->Append(ID_TRANSPARENCY_METHOD1, "&Sherilyn's Commute");
     menuTransparency->Append(ID_TRANSPARENCY_METHOD2, "&Michael's Commute");
+    menuTransparency->Append(ID_TRANSPARENCY_METHOD3, "&Added");
 
     wxMenuBar* menuBar = new wxMenuBar;
     menuBar->Append(menuFile, "&File");
@@ -581,6 +626,7 @@ MyFrame::MyFrame(const input_data_struct& input_data)
     // Bind events for transparency menu options
     Bind(wxEVT_MENU, &MyFrame::OnTransparencyMethod1, this, ID_TRANSPARENCY_METHOD1);
     Bind(wxEVT_MENU, &MyFrame::OnTransparencyMethod2, this, ID_TRANSPARENCY_METHOD2);
+    Bind(wxEVT_MENU, &MyFrame::OnTransparencyMethod3, this, ID_TRANSPARENCY_METHOD3);
 
     Bind(wxEVT_MENU, &MyFrame::OnHello, this, ID_Hello);
     Bind(wxEVT_MENU, &MyFrame::OnAbout, this, wxID_ABOUT);

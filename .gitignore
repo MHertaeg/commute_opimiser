@@ -5,9 +5,7 @@ coordinates.xlsx
 # Ignore build directories
 bin/
 obj/
-Debug/
-Release/
-x64/
+x64/Debug/
 commute/
 x86/
 
